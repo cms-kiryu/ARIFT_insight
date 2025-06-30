@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instagramインサイトレポート</title>
+    <!-- Tailwind CSS CDNを読み込み -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Interフォントを読み込み（Tailwindのデフォルトフォント） -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Chart.js CDNを読み込み（グラフ描画用） -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js Datalabels Plugin CDNを読み込み（データラベル表示用） -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <style>
+        /* ボディ全体のフォントをInterに設定 */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* キャンバス要素（グラフ）の基本スタイル */
+        canvas {
+            background-color: #fff; /* 背景色を白に */
+            border-radius: 0.5rem; /* 角を丸く */
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* 影を追加 */
+            padding: 1rem; /* 内側の余白 */
+            /* heightは親要素によって制御されるため、明示的に指定しないか、100%にする */
+            height: 100%; 
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4">
+    <div class="max-w-6xl mx-auto bg-white rounded-lg shadow-xl p-6 md:p-8">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">Instagramインサイトレポート</h1>
+
+        <!-- ファイルアップロードセクション -->
+        <div class="mb-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <p class="text-blue-800 mb-4 font-semibold">以下のCSVファイルをアップロードしてください:</p>
+            <ul class="list-disc list-inside text-blue-700 mb-4">
+                <li>フォロー.csv</li>
+                <li>アクセス.csv</li>
+                <li>リーチ.csv</li>
+                <li>閲覧数.csv</li>
+            </ul>
+            <!-- ファイル選択ボタン -->
+            <label for="csvFileInput" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white font-semibold rounded-md shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 cursor-pointer">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+                CSVファイルを選択
+            </label>
+            <!-- 実際のファイル入力要素（非表示） -->
+            <input type="file" id="csvFileInput" multiple accept=".csv" class="hidden" onchange="handleFiles(event)">
+            <!-- ローディングメッセージ -->
+            <p id="loadingMessage" class="mt-4 text-center text-gray-600 hidden">
+                <span class="animate-spin inline-block h-5 w-5 border-2 border-t-2 border-blue-500 rounded-full mr-2"></span>
+                ファイルを読み込み中...
+            </p>
+            <!-- エラーメッセージ -->
+            <p id="errorMessage" class="mt-4 text-red-600 hidden">ファイル処理中にエラーが発生しました。正しいCSVファイルがすべてアップロードされているか確認してください。</p>
+        </div>
+
+        <!-- 月別リーチ数手動入力セクション -->
+        <div id="manualReachInputContainer" class="mb-8 p-4 bg-yellow-50 rounded-lg border border-yellow-200 hidden">
+            <!-- JavaScriptによって内容が挿入されます -->
+        </div>
+
+        <!-- レポート表示コンテナ（ファイルアップロード後に表示） -->
+        <div id="reportContainer" class="hidden">
+            <!-- アカウントサマリーセクション -->
+            <section class="mb-8">
+                <h2 class="text-2xl font-semibold text-gray-700 mb-4">アカウントサマリー</h2>
+                <div class="mb-4">
+                    <label for="monthSelector" class="block text-gray-700 text-sm font-bold mb-2">レポート対象月:</label>
+                    <!-- 月選択プルダウン -->
+                    <select id="monthSelector" class="shadow appearance-none border rounded-md w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline bg-white"></select>
+                </div>
+                <!-- 月別サマリーテーブルの表示エリア -->
+                <div id="monthlySummary" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- JavaScriptによってサマリーカードが挿入されます -->
+                </div>
+            </section>
+
+            <!-- 日別データ推移セクション -->
+            <section class="mb-8">
+                <h2 class="text-2xl font-semibold text-gray-700 mb-4">日別データ推移</h2>
+                <p class="text-gray-600 mb-4">選択された月の各指標の日別推移を表示します。</p>
+                <!-- 日別グラフの表示コンテナ -->
+                <div id="dailyChartsContainer" class="grid grid-cols-1 gap-6">
+                    <!-- JavaScriptによって日別グラフが挿入されます -->
+                </div>
+            </section>
+
+            <!-- 全期間の月別推移セクション -->
+            <section class="mb-8">
+                <h2 class="text-2xl font-semibold text-gray-700 mb-4">全期間の月別推移</h2>
+                <p class="text-gray-600 mb-4">全期間の各指標の月別推移を表示します。</p>
+                <!-- 月別トレンドグラフの表示コンテナ -->
+                <div id="monthlyTrendChartsContainer" class="grid grid-cols-1 gap-6">
+                    <!-- JavaScriptによって月別トレンドグラフが挿入されます -->
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script>
+        // Chart.js Datalabels Pluginの登録
+        // Chart.jsが読み込まれた後、チャートインスタンス作成前に一度だけ実行
+        Chart.register(ChartDataLabels);
+
+        // グローバル変数としてデータを保持
+        let allProcessedData = {};     // CSVから読み込まれた加工前のデータ（日付、値、年月）を格納
+        let monthlyAggregatedData = {}; // 月ごとに集計された合計値を格納
+        let dailyAggregatedData = {};   // 日ごとのデータ（グラフ描画用）を格納
+        let chartInstances = {};        // Chart.jsのグラフインスタンスを管理（更新/破棄用）
+        let manualMonthlyReach = {};    // 手動入力されたリーチ数
+
+        // ファイル名と指標名のマッピング
+        const fileNamesMap = {
+            'フォロー.csv': 'フォロー数',
+            'アクセス.csv': 'アクセス数',
+            'リーチ.csv': 'リーチ数',
+            '閲覧数.csv': '閲覧数'
+        };
+
+        // グラフとサマリー表示の順番を定義
+        const metricDisplayOrder = [
+            '閲覧数',
+            'リーチ数',
+            'アクセス数',
+            'アクセス率',
+            'フォロー数',
+            'フォロワー転換率'
+        ];
+
+        // DOM要素の参照を取得
+        const loadingMessage = document.getElementById('loadingMessage');
+        const errorMessage = document.getElementById('errorMessage');
+        const reportContainer = document.getElementById('reportContainer');
+        const monthSelector = document.getElementById('monthSelector');
+        const monthlySummaryDiv = document.getElementById('monthlySummary');
+        const dailyChartsContainer = document.getElementById('dailyChartsContainer');
+        const monthlyTrendChartsContainer = document.getElementById('monthlyTrendChartsContainer');
+        const manualReachInputContainer = document.getElementById('manualReachInputContainer');
+
+        /**
+         * CSV文字列をパースし、指定されたフォーマットのオブジェクト配列に変換します。
+         * この関数は、CSVファイルが'sep=,', 'タイトル行', 'ヘッダー行', 'データ行'という特定の形式であることを想定しています。
+         * @param {string} csvString - CSVファイルの生データ文字列。
+         * @returns {Array<Object>|null} パースされたデータオブジェクトの配列、またはエラーの場合はnull。
+         */
+        function parseCSV(csvString) {
+            // 空行を除外して行に分割
+            const lines = csvString.split('\n').filter(line => line.trim() !== '');
+
+            // 少なくとも4行（sep=,, タイトル, ヘッダー, データ1行）が必要です。
+            if (lines.length < 4) {
+                console.error("CSVファイルに十分なデータがありません。少なくともタイトル、ヘッダー、および1行のデータが必要です。");
+                return null;
+            }
+
+            // 実際のヘッダーは、フィルターされた配列の3番目の行（インデックス2）にあります。
+            const headerLine = lines[2];
+            const headers = headerLine.split(',').map(h => h.trim().replace(/"/g, ''));
+
+            // データは、フィルターされた配列の4番目の行（インデックス3）から始まります。
+            const dataRows = lines.slice(3);
+            const parsedData = [];
+
+            dataRows.forEach(row => {
+                const values = row.split(',').map(v => v.trim().replace(/"/g, ''));
+                // ヘッダーの数と値の数が一致する場合のみ処理
+                if (values.length === headers.length) {
+                    const rowObj = {};
+                    headers.forEach((header, i) => {
+                        rowObj[header] = values[i];
+                    });
+                    parsedData.push(rowObj);
+                } else {
+                    console.warn(`警告: CSVデータ行の列数 (${values.length}) がヘッダー (${headers.length}) と一致しません: "${row}"`);
+                }
+            });
+            return parsedData;
+        }
+
+        /**
+         * パースされた生データを整形し、日付と数値を処理します。
+         * 日付文字列からタイムスタンプ部分を削除し、Dateオブジェクトに変換します。
+         * 'Primary'列の値を数値に変換します。
+         * @param {Array<Object>} rawData - `parseCSV`によってパースされたデータ。
+         * @returns {Array<Object>} 整形されたデータオブジェクトの配列。
+         */
+        function processRawMetricData(rawData) {
+            if (!rawData) return []; // rawDataがnullの場合は空配列を返す
+            const processed = [];
+            rawData.forEach(row => {
+                // '日付'列から日付部分のみを抽出し、Dateオブジェクトに変換
+                const dateStr = row['日付'] ? row['日付'].split('T')[0] : null;
+                let date = null;
+                try {
+                    if (dateStr) date = new Date(dateStr);
+                } catch (e) {
+                    console.error("日付のパースエラー:", e, row); // エラー発生時のデバッグ情報
+                }
+                
+                // 'Primary'列の値を浮動小数点数に変換
+                const value = parseFloat(row['Primary']);
+
+                // 日付が有効で、かつ値が数値である場合のみ処理済みのデータに追加
+                if (date && !isNaN(value)) {
+                    processed.push({
+                        date: date,
+                        // 年月を 'YYYY-MM' 形式の文字列で保持
+                        yearMonth: date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0'),
+                        value: value
+                    });
+                }
+            });
+            return processed;
+        }
+
+        /**
+         * 処理されたデータから月別および日別の集計データを作成します。
+         * 新しい指標（アクセス率、フォロワー転換率）をここで計算します。
+         * リーチ数は手動入力値を優先します。
+         */
+        function aggregateAllData() {
+            monthlyAggregatedData = {};
+            dailyAggregatedData = {};
+
+            // Step 1: 各基本指標の日別および月別の合計をCSVデータから計算
+            const tempDailySums = {}; // {日付文字列: { metricName: sum, ... } }
+            const tempMonthlySums = {}; // {年月文字列: { metricName: sum, ... } }
+
+            const primaryMetrics = ['閲覧数', 'リーチ数', 'アクセス数', 'フォロー数'];
+
+            for (const metricName of primaryMetrics) {
+                if (allProcessedData[metricName]) { // データが存在する場合のみ
+                    allProcessedData[metricName].forEach(item => {
+                        const dateStr = item.date.toISOString().split('T')[0]; //YYYY-MM-DD
+                        const yearMonthStr = item.yearMonth; //YYYY-MM
+
+                        // 日別合計
+                        if (!tempDailySums[dateStr]) tempDailySums[dateStr] = {};
+                        tempDailySums[dateStr][metricName] = (tempDailySums[dateStr][metricName] || 0) + item.value;
+
+                        // 月別合計
+                        if (!tempMonthlySums[yearMonthStr]) tempMonthlySums[yearMonthStr] = {};
+                        tempMonthlySums[yearMonthStr][metricName] = (tempMonthlySums[yearMonthStr][metricName] || 0) + item.value;
+                    });
+                }
+            }
+
+            // Step 2: 日別データの構築（派生指標とリーチ数）
+            const sortedDailyDateStrs = Object.keys(tempDailySums).sort();
+
+            for (const dateStr of sortedDailyDateStrs) {
+                const dailyData = tempDailySums[dateStr];
+                const dateObj = new Date(dateStr);
+                const yearMonthOfDate = dateObj.getFullYear() + '-' + String(dateObj.getMonth() + 1).padStart(2, '0');
+
+                // アクセス率の計算
+                const dailyAccesses = dailyData['アクセス数'] || 0;
+                const dailyImpressions = dailyData['閲覧数'] || 0;
+                const dailyAccessRate = (dailyImpressions > 0) ? (dailyAccesses / dailyImpressions) * 100 : 0;
+                
+                // フォロワー転換率の計算
+                const dailyFollows = dailyData['フォロー数'] || 0;
+                const dailyProfileViews = dailyData['アクセス数'] || 0;
+                const dailyFollowerConversionRate = (dailyProfileViews > 0) ? (dailyFollows / dailyProfileViews) * 100 : 0;
+
+                for(const metric of metricDisplayOrder) { 
+                    if (!dailyAggregatedData[metric]) dailyAggregatedData[metric] = [];
+                    if (metric === 'アクセス率') {
+                        dailyAggregatedData[metric].push({ date: dateObj, yearMonth: yearMonthOfDate, value: dailyAccessRate });
+                    } else if (metric === 'フォロワー転換率') {
+                        dailyAggregatedData[metric].push({ date: dateObj, yearMonth: yearMonthOfDate, value: dailyFollowerConversionRate });
+                    } else if (dailyData[metric] !== undefined) {
+                         // 日別のリーチ数はCSVの値をそのまま使用
+                         dailyAggregatedData[metric].push({ date: dateObj, yearMonth: yearMonthOfDate, value: dailyData[metric] });
+                    }
+                }
+            }
+
+            // Step 3: 月別データの構築（派生指標とリーチ数 - 手動入力優先）
+            const sortedMonthlyYearMonthStrs = Object.keys(tempMonthlySums).sort();
+
+            for (const yearMonthStr of sortedMonthlyYearMonthStrs) {
+                const monthlyData = tempMonthlySums[yearMonthStr];
+
+                // 月別アクセス率の計算
+                const monthlyAccesses = monthlyData['アクセス数'] || 0;
+                const monthlyImpressions = monthlyData['閲覧数'] || 0;
+                const monthlyAccessRate = (monthlyImpressions > 0) ? (monthlyAccesses / monthlyImpressions) * 100 : 0;
+                
+                // 月別フォロワー転換率の計算
+                const monthlyFollows = monthlyData['フォロー数'] || 0;
+                const monthlyProfileViews = monthlyData['アクセス数'] || 0;
+                const monthlyFollowerConversionRate = (monthlyProfileViews > 0) ? (monthlyFollows / monthlyProfileViews) * 100 : 0;
+
+                for(const metric of metricDisplayOrder) { 
+                     if (!monthlyAggregatedData[metric]) monthlyAggregatedData[metric] = [];
+                     if (metric === 'アクセス率') {
+                         monthlyAggregatedData[metric].push({ 年月: yearMonthStr, Primary: monthlyAccessRate });
+                     } else if (metric === 'フォロワー転換率') {
+                         monthlyAggregatedData[metric].push({ 年月: yearMonthStr, Primary: monthlyFollowerConversionRate });
+                     } else if (metric === 'リーチ数') {
+                         // 月別のリーチ数は手動入力値があればそれを使用、なければCSVからの合計値を使用
+                         const manualValue = manualMonthlyReach[yearMonthStr];
+                         if (manualValue !== undefined && !isNaN(manualValue)) {
+                             monthlyAggregatedData[metric].push({ 年月: yearMonthStr, Primary: manualValue });
+                         } else {
+                             monthlyAggregatedData[metric].push({ 年月: yearMonthStr, Primary: monthlyData[metric] });
+                         }
+                     }
+                     else if (monthlyData[metric] !== undefined) {
+                         monthlyAggregatedData[metric].push({ 年月: yearMonthStr, Primary: monthlyData[metric] });
+                     }
+                }
+            }
+
+            // 各指標のデータを日付/年月順にソート（最終ソート）
+            for (const metricName in monthlyAggregatedData) {
+                monthlyAggregatedData[metricName].sort((a, b) => a.年月.localeCompare(b.年月));
+            }
+            for (const metricName in dailyAggregatedData) {
+                dailyAggregatedData[metricName].sort((a, b) => a.date - b.date);
+            }
+        }
+
+        /**
+         * 月別リーチ数の手動入力フィールドを作成します。
+         * aggregateAllData()が実行された後に呼び出されます。
+         */
+        function createManualReachInputs() {
+            manualReachInputContainer.innerHTML = ''; // 以前の入力フィールドをクリア
+
+            const allMonths = [];
+            // monthlyAggregatedDataから全ての存在する月を取得
+            // どの指標でも同じ月が存在するはずなので、最初の指標（例: 閲覧数）を使用
+            const firstMetric = metricDisplayOrder.find(m => monthlyAggregatedData[m] && monthlyAggregatedData[m].length > 0);
+            if (firstMetric) {
+                monthlyAggregatedData[firstMetric].forEach(item => {
+                    if (!allMonths.includes(item.年月)) {
+                        allMonths.push(item.年月);
+                    }
+                });
+            }
+            allMonths.sort();
+
+            if (allMonths.length === 0) {
+                manualReachInputContainer.innerHTML = '<p class="text-gray-600">手動で入力する月別リーチ数データがありません。</p>';
+                manualReachInputContainer.classList.add('hidden');
+                return;
+            }
+
+            const title = document.createElement('h3');
+            title.className = 'text-xl font-semibold text-gray-700 mb-3';
+            title.textContent = '月別リーチ数（手動入力）';
+            manualReachInputContainer.appendChild(title);
+
+            const description = document.createElement('p');
+            description.className = 'text-gray-600 mb-4';
+            description.textContent = '各月のリーチ数を手動で入力し、「入力値を適用」ボタンをクリックしてください。入力がない場合はCSVの合計値が使用されます。';
+            manualReachInputContainer.appendChild(description);
+
+            const inputGrid = document.createElement('div');
+            inputGrid.className = 'grid grid-cols-1 md:grid-cols-3 gap-4 mb-4';
+
+            allMonths.forEach(month => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center space-x-2';
+
+                const label = document.createElement('label');
+                label.className = 'font-medium text-gray-700 w-24'; // ラベル幅を調整
+                label.textContent = month + ':';
+                label.htmlFor = `manualReach-${month}`;
+
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.id = `manualReach-${month}`;
+                input.className = 'shadow appearance-none border rounded-md py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline flex-grow';
+                input.placeholder = '数値を入力';
+                
+                // 現在の集計されたリーチ数（CSV由来）または手動入力値があればそれを初期値として設定
+                const currentAggregatedReach = monthlyAggregatedData['リーチ数'] ? monthlyAggregatedData['リーチ数'].find(item => item.年月 === month) : null;
+                const initialValue = manualMonthlyReach[month] !== undefined ? manualMonthlyReach[month] : (currentAggregatedReach ? Math.round(currentAggregatedReach.Primary) : '');
+                if (initialValue !== '') {
+                    input.value = initialValue;
+                }
+
+                div.appendChild(label);
+                div.appendChild(input);
+                inputGrid.appendChild(div);
+            });
+
+            manualReachInputContainer.appendChild(inputGrid);
+
+            const applyButton = document.createElement('button');
+            applyButton.className = 'inline-flex items-center px-4 py-2 bg-green-600 text-white font-semibold rounded-md shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 cursor-pointer';
+            applyButton.textContent = '入力値を適用';
+            applyButton.onclick = applyManualReach;
+            manualReachInputContainer.appendChild(applyButton);
+
+            manualReachInputContainer.classList.remove('hidden'); // 手動入力セクションを表示
+        }
+
+        /**
+         * 手動入力されたリーチ数を適用し、レポートを再描画します。
+         */
+        function applyManualReach() {
+            const allMonths = [];
+            // monthlyAggregatedDataから全ての存在する月を取得
+            const firstMetric = metricDisplayOrder.find(m => monthlyAggregatedData[m] && monthlyAggregatedData[m].length > 0);
+            if (firstMetric) {
+                monthlyAggregatedData[firstMetric].forEach(item => {
+                    if (!allMonths.includes(item.年月)) {
+                        allMonths.push(item.年月);
+                    }
+                });
+            }
+            allMonths.sort();
+
+            allMonths.forEach(month => {
+                const input = document.getElementById(`manualReach-${month}`);
+                if (input) {
+                    const parsedValue = parseFloat(input.value);
+                    if (!isNaN(parsedValue)) {
+                        manualMonthlyReach[month] = parsedValue;
+                    } else if (input.value === '') {
+                        // 空の場合は手動入力なしとして扱う
+                        delete manualMonthlyReach[month]; 
+                    } else {
+                        console.warn(`無効な入力値: ${input.value} for month ${month}. この値は無視されます。`);
+                        // 無効な入力があった場合、エラーメッセージの表示を検討してもよい
+                    }
+                }
+            });
+
+            // 手動入力値に基づいてデータを再集計
+            aggregateAllData();
+
+            // 影響を受けるレポートセクションのみを再描画
+            updateMonthlySummary(monthSelector.value); // 現在選択されている月のサマリーを再描画
+            createMonthlyTrendCharts(); // 月別推移グラフを再描画
+            
+            // シンプルなフィードバック
+            console.log('手動リーチ数が適用されました。');
+        }
+
+        /**
+         * ファイル入力イベントハンドラ。
+         * ユーザーがCSVファイルを選択すると呼び出されます。
+         * 選択されたファイルを読み込み、パースし、処理してデータを準備します。
+         * @param {Event} event - ファイル入力イベント。
+         */
+        async function handleFiles(event) {
+            // ローディングメッセージを表示し、エラーメッセージとレポートコンテナを非表示にする
+            loadingMessage.classList.remove('hidden');
+            loadingMessage.textContent = 'ファイルを読み込み中...'; // ローディングテキストをリセット
+            errorMessage.classList.add('hidden');
+            reportContainer.classList.add('hidden');
+            manualReachInputContainer.classList.add('hidden'); // 手動入力セクションも非表示に
+
+            const files = event.target.files;
+            if (files.length === 0) {
+                loadingMessage.classList.add('hidden');
+                return;
+            }
+
+            allProcessedData = {}; // 以前のデータをクリア
+            manualMonthlyReach = {}; // 手動入力値もクリア
+
+            let filesLoaded = 0;   // 読み込み済みファイル数
+            const totalFiles = files.length; // 総ファイル数
+            let hasError = false; // エラーフラグ
+
+            // 各ファイルについて処理
+            for (const file of files) {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    try {
+                        const metricName = fileNamesMap[file.name];
+                        if (metricName) {
+                            // CSVをパースし、生データを加工
+                            const rawData = parseCSV(reader.result);
+                            if (rawData) {
+                                allProcessedData[metricName] = processRawMetricData(rawData);
+                            } else {
+                                // CSVパースに失敗した場合のエラー
+                                throw new Error(`CSVパースに失敗しました: ${file.name}`);
+                            }
+                        } else {
+                            console.warn(`警告: 不明なファイル名: ${file.name} - スキップします。`);
+                        }
+                    } catch (e) {
+                        console.error(`エラー: ファイル '${file.name}' の処理中に問題が発生しました:`, e);
+                        errorMessage.classList.remove('hidden'); // エラーメッセージを表示
+                        hasError = true;
+                    } finally {
+                        filesLoaded++;
+                        // 全てのファイルの読み込みが完了したらレポートをレンダリング
+                        if (filesLoaded === totalFiles) {
+                            loadingMessage.classList.add('hidden'); // ローディングメッセージを非表示に
+                            if (!hasError) {
+                                renderReport(); // レポートを生成・表示
+                                reportContainer.classList.remove('hidden'); // レポートコンテナを表示
+                            }
+                        }
+                    }
+                };
+                reader.readAsText(file); // ファイルをテキストとして読み込む
+            }
+        }
+
+        /**
+         * 全てのレポート要素をレンダリングします。
+         * データ集計後、月セレクターのオプションを更新し、各レポート表示関数を呼び出します。
+         */
+        function renderReport() {
+            aggregateAllData(); // 集計データを最新の状態に更新
+
+            const allMonths = [];
+            // monthlyAggregatedDataの任意の指標から月を抽出
+            const firstMetric = metricDisplayOrder.find(m => monthlyAggregatedData[m] && monthlyAggregatedData[m].length > 0);
+            if (firstMetric) {
+                monthlyAggregatedData[firstMetric].forEach(item => {
+                    if (!allMonths.includes(item.年月)) {
+                        allMonths.push(item.年月);
+                    }
+                });
+            }
+            allMonths.sort(); // 年月順にソート
+
+            // 月セレクターのオプションをクリアして更新
+            monthSelector.innerHTML = '';
+            if (allMonths.length > 0) {
+                allMonths.forEach(month => {
+                    const option = document.createElement('option');
+                    option.value = month;
+                    option.textContent = month;
+                    monthSelector.appendChild(option);
+                });
+                // 最新の月をデフォルトで選択
+                monthSelector.value = allMonths[allMonths.length - 1]; 
+            } else {
+                // 利用可能な月データがない場合
+                console.warn("利用可能な月データがありません。");
+                monthlySummaryDiv.innerHTML = '<p class="text-gray-600">レポートを表示するデータがありません。</p>';
+                dailyChartsContainer.innerHTML = '';
+                monthlyTrendChartsContainer.innerHTML = '';
+                manualReachInputContainer.classList.add('hidden'); // データがない場合は非表示
+                return;
+            }
+            
+            // 月セレクターの変更イベントリスナーを設定
+            // このリスナーは一度だけアタッチすれば十分です。
+            if (!monthSelector.hasAttribute('data-listener-attached')) {
+                monthSelector.onchange = (event) => {
+                    updateMonthlySummary(event.target.value); // 月別サマリーを更新
+                    updateDailyCharts(event.target.value);   // 日別グラフを更新
+                };
+                monthSelector.setAttribute('data-listener-attached', 'true');
+            }
+
+            // 初期表示として、現在の選択月のサマリーと日別グラフ、および全期間の月別トレンドグラフを生成
+            updateMonthlySummary(monthSelector.value);
+            updateDailyCharts(monthSelector.value);
+            createMonthlyTrendCharts();
+            createManualReachInputs(); // 手動入力欄を生成
+        }
+
+        /**
+         * 月別サマリーをカード形式で更新します。
+         * 選択された月と前月のデータを比較し、カード形式で表示します。
+         * `metricDisplayOrder`に基づいて指標を表示します。
+         */
+        function updateMonthlySummary(selectedMonth) {
+            // 以前のカードをクリア
+            monthlySummaryDiv.innerHTML = ''; 
+
+            const title = document.createElement('h3');
+            title.className = 'text-xl font-semibold mb-3 col-span-full'; // 列をまたいで中央に配置
+            title.textContent = `${selectedMonth} のアカウントサマリー`;
+            monthlySummaryDiv.appendChild(title);
+
+            // 前月の計算: Dateオブジェクトを使用して安全に計算
+            const currentPeriod = new Date(selectedMonth + '-01');
+            const prevMonthDate = new Date(currentPeriod.getFullYear(), currentPeriod.getMonth() - 1, 1);
+            const previousMonthStr = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
+
+            for (const metricName of metricDisplayOrder) {
+                if (!monthlyAggregatedData[metricName]) continue;
+
+                const currentMonthData = monthlyAggregatedData[metricName].find(item => item.年月 === selectedMonth);
+                const currentMonthValue = currentMonthData ? currentMonthData.Primary : 0;
+
+                const previousMonthData = monthlyAggregatedData[metricName].find(item => item.年月 === previousMonthStr);
+                const previousMonthValue = previousMonthData ? previousMonthData.Primary : 0;
+
+                let displayCurrent = '';
+                let differenceDisplay = "";
+                let textColorClass = 'text-gray-500';
+
+                // 今月の値をフォーマット
+                if (metricName === 'アクセス率' || metricName === 'フォロワー転換率') {
+                    displayCurrent = `${currentMonthValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+                } else {
+                    displayCurrent = Math.round(currentMonthValue).toLocaleString();
+                }
+
+                // 前月比を計算し、表示
+                let diffValue = currentMonthValue - previousMonthValue;
+                if (previousMonthValue === 0 && currentMonthValue === 0) {
+                    differenceDisplay = "0";
+                } else if (previousMonthValue === 0 && currentMonthValue !== 0) {
+                    differenceDisplay = "N/A"; // 前月0で今月がある場合
+                    textColorClass = 'text-gray-500';
+                } else {
+                    if (metricName === 'アクセス率' || metricName === 'フォロワー転換率') {
+                        differenceDisplay = `${diffValue > 0 ? '+' : ''}${diffValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                    } else {
+                        differenceDisplay = `${diffValue > 0 ? '+' : ''}${Math.round(diffValue).toLocaleString()}`;
+                    }
+                    if (diffValue > 0) textColorClass = 'text-green-600';
+                    else if (diffValue < 0) textColorClass = 'text-red-600';
+                }
+                
+                // パーセンテージ指標の差分には%を付与
+                if ((metricName === 'アクセス率' || metricName === 'フォロワー転換率') && differenceDisplay !== "N/A" && differenceDisplay !== "0") {
+                    differenceDisplay += '%';
+                }
+
+                // カード要素の作成
+                const cardDiv = document.createElement('div');
+                cardDiv.className = 'bg-white p-4 rounded-lg shadow-md flex flex-col justify-between items-start'; // カードデザインの基本スタイル
+
+                cardDiv.innerHTML = `
+                    <p class="text-sm font-medium text-gray-500 mb-2">${metricName}</p>
+                    <p class="text-3xl font-bold text-gray-800 mb-2">${displayCurrent}</p>
+                    <p class="text-xs font-semibold ${textColorClass}">${differenceDisplay}</p>
+                `;
+                monthlySummaryDiv.appendChild(cardDiv);
+            }
+        }
+
+        /**
+         * 指定された値の配列と指標のタイプに基づいて、グラフの縦軸の推奨最大値を計算します。
+         * @param {Array<number>} values - データポイントの値の配列。
+         * @param {boolean} isPercentage - 指標がパーセンテージであるかどうかのフラグ。
+         * @returns {number|undefined} 計算された推奨最大値、またはデータがない場合は undefined。
+         */
+        function calculateSuggestedMax(values, isPercentage) {
+            if (values.length === 0) {
+                return undefined; // Chart.jsに自動スケーリングを任せる
+            }
+
+            const maxValue = Math.max(...values);
+            let calculatedMax;
+
+            if (isPercentage) {
+                // パーセンテージの場合、最大値に20%の余白を追加し、最大100%に制限、最低10%は表示
+                calculatedMax = maxValue * 1.2; 
+                calculatedMax = Math.max(calculatedMax, 10); 
+                calculatedMax = Math.min(calculatedMax, 100); 
+            } else {
+                if (maxValue === 0) {
+                    // 最大値が0の場合は、視認性のため最低限の範囲を設定（例: 10）
+                    calculatedMax = 10; 
+                } else {
+                    // その他の数値の場合、最大値に10%の余白を追加
+                    calculatedMax = maxValue * 1.1; 
+                }
+            }
+            return calculatedMax;
+        }
+
+
+        /**
+         * 日別データグラフを更新します。
+         * 選択された月の日別データをChart.jsでグラフ化して表示します。
+         * `metricDisplayOrder`に基づいて指標を表示します。
+         */
+        function updateDailyCharts(selectedMonth) {
+            dailyChartsContainer.innerHTML = ''; // 以前のグラフをクリア
+            
+            // 既存のChart.jsインスタンスを破棄（メモリリーク防止）
+            for (const key in chartInstances) {
+                if (key.startsWith('daily-')) { // 日別グラフのインスタンスのみを対象
+                    chartInstances[key].destroy();
+                    delete chartInstances[key];
+                }
+            }
+
+            for (const metricName of metricDisplayOrder) { // 順序を適用
+                // データが存在しない指標の場合はスキップ
+                if (!dailyAggregatedData[metricName]) continue;
+
+                // 選択された月のデータのみをフィルタリング
+                const data = dailyAggregatedData[metricName].filter(item => item.yearMonth === selectedMonth);
+                
+                if (data.length > 0) {
+                    const canvasId = `dailyChart-${metricName.replace(/ /g, '')}`; // キャンバスIDを生成
+                    // グラフを囲むdiv要素を作成し、高さのクラスを適用
+                    const chartDiv = document.createElement('div');
+                    chartDiv.className = 'bg-white p-4 rounded-lg shadow-md h-80'; // h-80 クラスを追加
+                    chartDiv.innerHTML = `<h3 class="text-lg font-semibold text-gray-700 mb-2">${metricName} - 日別推移 (${selectedMonth})</h3><canvas id="${canvasId}"></canvas>`;
+                    dailyChartsContainer.appendChild(chartDiv); // コンテナに追加
+
+                    const ctx = document.getElementById(canvasId).getContext('2d');
+                    
+                    // データを日付順にソートし、ラベルと値を抽出
+                    const sortedData = data.sort((a, b) => a.date - b.date);
+                    const labels = sortedData.map(item => item.date.toLocaleDateString('ja-JP', { month: '2-digit', day: '2-digit' }));
+                    const values = sortedData.map(item => item.value);
+
+                    const isPercentageMetric = (metricName === 'アクセス率' || metricName === 'フォロワー転換率');
+                    const suggestedMax = calculateSuggestedMax(values, isPercentageMetric);
+
+
+                    // パーセンテージ軸のフォーマッターとツールチップ
+                    const tickCallback = (value) => {
+                        return (isPercentageMetric) ? `${value}%` : value.toLocaleString();
+                    };
+
+                    const tooltipLabelCallback = function(context) {
+                        let label = context.dataset.label || '';
+                        if (label) {
+                            label += ': ';
+                        }
+                        if (isPercentageMetric) {
+                            label += context.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+                        } else {
+                            label += Math.round(context.parsed.y).toLocaleString();
+                        }
+                        return label;
+                    };
+
+
+                    // Chart.jsインスタンスを作成
+                    chartInstances[canvasId] = new Chart(ctx, {
+                        type: 'line', // 折れ線グラフ
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: metricName,
+                                data: values,
+                                // パーセンテージ指標とその他の指標で色分け
+                                borderColor: (isPercentageMetric) ? '#10B981' : '#4F46E5', // Green for percentages, Indigo otherwise
+                                backgroundColor: (isPercentageMetric) ? 'rgba(16, 185, 129, 0.1)' : 'rgba(79, 70, 229, 0.1)',
+                                tension: 0.3, // 線の滑らかさ
+                                fill: true, // 塗りつぶしを有効に
+                                pointRadius: 3, // 点のサイズ
+                                pointBackgroundColor: (isPercentageMetric) ? '#10B981' : '#4F46E5',
+                                pointBorderColor: '#fff', // 点の枠の色
+                                pointHoverRadius: 5 // ホバー時の点のサイズ
+                            }]
+                        },
+                        options: {
+                            responsive: true, // レスポンシブ対応
+                            maintainAspectRatio: false, // アスペクト比を維持しない
+                            plugins: {
+                                legend: {
+                                    display: false // 凡例を非表示
+                                },
+                                title: {
+                                    display: false // タイトルはh3タグで表示するため非表示
+                                },
+                                tooltip: { // ツールチップの表示を調整
+                                    callbacks: {
+                                        label: tooltipLabelCallback
+                                    }
+                                },
+                                datalabels: { // データラベルは日別推移には表示しない
+                                    display: false
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    grid: {
+                                        display: false // X軸グリッド線を非表示
+                                    },
+                                    ticks: {
+                                        maxRotation: 45, // ラベルの最大回転角度
+                                        minRotation: 45,   // ラベルの最小回転角度
+                                        autoSkip: true, // ラベルを自動で間引く
+                                        maxTicksLimit: 15 // 表示される目盛りの最大数 (15個程度)
+                                    }
+                                },
+                                y: {
+                                    beginAtZero: true, // Y軸を0から開始
+                                    grid: {
+                                        color: '#E5E7EB' // Gray 200（Y軸グリッド線の色）
+                                    },
+                                    suggestedMax: suggestedMax, // 動的に計算された最大値を設定
+                                    ticks: {
+                                        callback: tickCallback // Y軸ラベルのフォーマットを調整
+                                    }
+                                }
+                            }
+                        }
+                    });
+                } else {
+                    // データが見つからない場合のメッセージ
+                    const noDataDiv = document.createElement('div');
+                    noDataDiv.className = 'bg-white p-4 rounded-lg shadow-md h-80 col-span-full';
+                    noDataDiv.innerHTML = `<p class="text-gray-600">${metricName} の ${selectedMonth} データは見つかりませんでした。</p>`;
+                    dailyChartsContainer.appendChild(noDataDiv);
+                }
+            }
+        }
+
+        /**
+         * 全期間の月別推移グラフを作成します。
+         * 全ての月別集計データをChart.jsでグラフ化して表示します。
+         * `metricDisplayOrder`に基づいて指標を表示します。
+         */
+        function createMonthlyTrendCharts() {
+            monthlyTrendChartsContainer.innerHTML = ''; // 以前のグラフをクリア
+            
+            // 既存のChart.jsインスタンスを破棄
+            for (const key in chartInstances) {
+                if (key.startsWith('monthly-trend-')) { // 月別トレンドグラフのインスタンスのみを対象
+                    chartInstances[key].destroy();
+                    delete chartInstances[key];
+                }
+            }
+
+            for (const metricName of metricDisplayOrder) { // 順序を適用
+                // データが存在しない指標の場合はスキップ
+                if (!monthlyAggregatedData[metricName]) continue;
+
+                const data = monthlyAggregatedData[metricName];
+                
+                if (data.length > 0) {
+                    const canvasId = `monthlyTrendChart-${metricName.replace(/ /g, '')}`; // キャンバスIDを生成
+                    // グラフを囲むdiv要素を作成し、高さのクラスを適用
+                    const chartDiv = document.createElement('div');
+                    chartDiv.className = 'bg-white p-4 rounded-lg shadow-md h-80'; // h-80 クラスを追加
+                    chartDiv.innerHTML = `<h3 class="text-lg font-semibold text-gray-700 mb-2">${metricName} - 月別推移</h3><canvas id="${canvasId}"></canvas>`;
+                    monthlyTrendChartsContainer.appendChild(chartDiv); // コンテナに追加
+
+                    const ctx = document.getElementById(canvasId).getContext('2d');
+                    
+                    // ラベルと値を抽出
+                    const labels = data.map(item => item.年月);
+                    const values = data.map(item => item.Primary);
+
+                    const isPercentageMetric = (metricName === 'アクセス率' || metricName === 'フォロワー転換率');
+                    const suggestedMax = calculateSuggestedMax(values, isPercentageMetric);
+
+                    // パーセンテージ軸のフォーマッターとツールチップ
+                    const tickCallback = (value) => {
+                        return (isPercentageMetric) ? `${value}%` : value.toLocaleString();
+                    };
+
+                    const tooltipLabelCallback = function(context) {
+                        let label = context.dataset.label || '';
+                        if (label) {
+                            label += ': ';
+                        }
+                        if (isPercentageMetric) {
+                            label += context.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+                        } else {
+                            label += Math.round(context.parsed.y).toLocaleString();
+                        }
+                        return label;
+                    };
+
+
+                    // Chart.jsインスタンスを作成
+                    chartInstances[canvasId] = new Chart(ctx, {
+                        type: 'line', // 折れ線グラフ
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: metricName,
+                                data: values,
+                                // パーセンテージ指標とその他の指標で色分け
+                                borderColor: (isPercentageMetric) ? '#10B981' : '#F59E0B', // Green for percentages, Amber otherwise
+                                backgroundColor: (isPercentageMetric) ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+                                tension: 0.3, // 線の滑らかさ
+                                fill: true, // 塗りつぶしを有効に
+                                pointRadius: 3, // 点のサイズ
+                                pointBackgroundColor: (isPercentageMetric) ? '#10B981' : '#F59E0B',
+                                pointBorderColor: '#fff', // 点の枠の色
+                                pointHoverRadius: 5 // ホバー時の点のサイズ
+                            }]
+                        },
+                        options: {
+                            responsive: true, // レスポンシブ対応
+                            maintainAspectRatio: false, // アスペクト比を維持しない
+                            layout: { // グラフ描画エリアのパディング
+                                top: 20,
+                                left: 20,
+                                right: 20
+                            },
+                            plugins: {
+                                legend: {
+                                    display: false // 凡例を非表示
+                                },
+                                title: {
+                                    display: false // タイトルはh3タグで表示するため非表示
+                                },
+                                tooltip: { // ツールチップの表示を調整
+                                    callbacks: {
+                                        label: tooltipLabelCallback
+                                    }
+                                },
+                                datalabels: { // データラベルの表示設定
+                                    align: 'end', // ラベルの位置（データポイントの端）
+                                    anchor: 'end', // アンカーポイント（データポイントの端）
+                                    color: '#333', // ラベルの色
+                                    font: {
+                                        weight: 'bold',
+                                        size: 10 // ラベルのフォントサイズ
+                                    },
+                                    offset: 12, // ラベルをデータポイントから少し離す
+                                    clip: false, // ラベルがグラフエリアの外にはみ出しても表示する
+                                    formatter: function(value, context) {
+                                        // ラベルのフォーマットを指標タイプに応じて変更
+                                        const currentMetricName = context.dataset.label;
+                                        if (currentMetricName === 'アクセス率' || currentMetricName === 'フォロワー転換率') {
+                                            return value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+                                        }
+                                        return Math.round(value).toLocaleString();
+                                    }
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    grid: {
+                                        display: false // X軸グリッド線を非表示
+                                    },
+                                    ticks: {
+                                        maxRotation: 45, // ラベルの最大回転角度
+                                        minRotation: 45,   // ラベルの最小回転角度
+                                        autoSkip: true, // ラベルを自動で間引く
+                                        maxTicksLimit: 12 // 表示される目盛りの最大数 (12個程度)
+                                    }
+                                },
+                                y: {
+                                    beginAtZero: true, // Y軸を0から開始
+                                    grid: {
+                                        color: '#E5E7EB' // Gray 200（Y軸グリッド線の色）
+                                    },
+                                    suggestedMax: suggestedMax, // 動的に計算された最大値を設定
+                                    ticks: {
+                                        callback: tickCallback // Y軸ラベルのフォーマットを調整
+                                    }
+                                }
+                            }
+                        }
+                    });
+                } else {
+                    // データが見つからない場合のメッセージ
+                    const noDataDiv = document.createElement('div');
+                    noDataDiv.className = 'bg-white p-4 rounded-lg shadow-md h-80 col-span-full';
+                    noDataDiv.innerHTML = `<p class="text-gray-600">${metricName} の月別推移データは見つかりませんでした。</p>`;
+                    monthlyTrendChartsContainer.appendChild(noDataDiv);
+                }
+            }
+        }
+
+        // DOMContentLoadedイベントでレポートコンテナを初期状態で非表示にする
+        document.addEventListener('DOMContentLoaded', () => {
+            reportContainer.classList.add('hidden');
+        });
+
+    </script>
+</body>
+</html>
